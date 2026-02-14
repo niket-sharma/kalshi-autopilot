@@ -1,5 +1,5 @@
 """Research Agent - Analyzes events and estimates probabilities."""
-from openai import OpenAI
+import google.generativeai as genai
 from typing import Optional, Tuple
 from models import Market, Event
 from api import NewsAggregator
@@ -13,8 +13,32 @@ class ResearchAgent:
     """Agent that researches events and estimates probabilities."""
     
     def __init__(self):
-        self.client = OpenAI(api_key=settings.openai_api_key)
         self.news_aggregator = NewsAggregator()
+        
+        # Configure AI provider
+        if settings.ai_provider == "gemini":
+            if settings.gemini_api_key:
+                genai.configure(api_key=settings.gemini_api_key)
+                self.model = genai.GenerativeModel('gemini-3-flash')
+                logger.info("Using Gemini 3 Flash (FREE tier)")
+            else:
+                raise ValueError("GEMINI_API_KEY not set in .env")
+        elif settings.ai_provider == "openai":
+            from openai import OpenAI
+            if settings.openai_api_key:
+                self.client = OpenAI(api_key=settings.openai_api_key)
+                logger.info("Using OpenAI GPT-4o-mini")
+            else:
+                raise ValueError("OPENAI_API_KEY not set in .env")
+        elif settings.ai_provider == "anthropic":
+            from anthropic import Anthropic
+            if settings.anthropic_api_key:
+                self.client = Anthropic(api_key=settings.anthropic_api_key)
+                logger.info("Using Anthropic Claude Sonnet")
+            else:
+                raise ValueError("ANTHROPIC_API_KEY not set in .env")
+        else:
+            raise ValueError(f"Unknown AI provider: {settings.ai_provider}")
         
     def analyze_market(self, market: Market) -> Event:
         """Analyze a market and estimate probability.
@@ -32,7 +56,7 @@ class ResearchAgent:
         articles = self.news_aggregator.get_news_for_event(keywords)
         news_summary = self.news_aggregator.summarize_news(articles)
         
-        # Step 2: Use GPT-4 to analyze and estimate probability
+        # Step 2: Use AI to analyze and estimate probability
         probability, confidence, reasoning = self._estimate_probability(
             question=market.question,
             news_context=news_summary,
@@ -66,7 +90,7 @@ class ResearchAgent:
         news_context: str,
         current_price: Optional[float]
     ) -> Tuple[float, float, str]:
-        """Use GPT-4 to estimate probability of event.
+        """Use AI to estimate probability of event.
         
         Args:
             question: Market question
@@ -96,24 +120,38 @@ Consider:
 - Known unknowns and uncertainties
 - Whether the market price seems mispriced
 
-Format your response as:
+Format your response EXACTLY as:
 PROBABILITY: 0.XX
 CONFIDENCE: 0.XX
 REASONING: Your reasoning here
 """
         
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # Cost-effective model
-                messages=[
-                    {"role": "system", "content": "You are an expert prediction market analyst."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=300
-            )
-            
-            content = response.choices[0].message.content
+            if settings.ai_provider == "gemini":
+                response = self.model.generate_content(prompt)
+                content = response.text
+                
+            elif settings.ai_provider == "openai":
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are an expert prediction market analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=300
+                )
+                content = response.choices[0].message.content
+                
+            elif settings.ai_provider == "anthropic":
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-5",
+                    max_tokens=300,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                content = response.content[0].text
             
             # Parse response
             probability = self._extract_value(content, "PROBABILITY")
@@ -125,13 +163,13 @@ REASONING: Your reasoning here
         except Exception as e:
             logger.error(f"Failed to estimate probability: {e}")
             # Fallback: return market price with low confidence
-            return current_price or 0.5, 0.3, "Analysis failed, using market price"
+            return current_price or 0.5, 0.3, f"Analysis failed ({settings.ai_provider}), using market price"
     
     def _extract_value(self, text: str, field: str) -> float:
-        """Extract numerical value from GPT response."""
+        """Extract numerical value from AI response."""
         try:
             for line in text.split("\n"):
-                if field in line:
+                if field in line.upper():
                     # Extract number
                     parts = line.split(":")
                     if len(parts) > 1:
@@ -142,10 +180,10 @@ REASONING: Your reasoning here
         return 0.5  # Default to 50% if parsing fails
     
     def _extract_reasoning(self, text: str) -> str:
-        """Extract reasoning from GPT response."""
+        """Extract reasoning from AI response."""
         try:
             for line in text.split("\n"):
-                if "REASONING" in line:
+                if "REASONING" in line.upper():
                     parts = line.split(":", 1)
                     if len(parts) > 1:
                         return parts[1].strip()

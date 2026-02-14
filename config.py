@@ -14,8 +14,11 @@ class Settings(BaseSettings):
     polymarket_private_key: str = ""
     polymarket_proxy_address: str = ""
     
-    # OpenAI
-    openai_api_key: str
+    # AI Model Configuration
+    ai_provider: str = "gemini"  # gemini, openai, or anthropic
+    gemini_api_key: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
     
     # News API (optional)
     news_api_key: str = ""
