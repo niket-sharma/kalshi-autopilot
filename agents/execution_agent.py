@@ -2,6 +2,7 @@
 from typing import Optional, List, Dict
 from models import Position, Portfolio, PositionStatus
 from api import KalshiClient
+from strategy.hedging import HedgingManager
 from config import settings
 import logging
 
@@ -14,12 +15,24 @@ class ExecutionAgent:
     def __init__(self):
         self.client = KalshiClient()
         
+        # Initialize hedging manager (from OctagonAI strategy)
+        self.hedger = None
+        if settings.enable_hedging:
+            self.hedger = HedgingManager(
+                min_confidence_for_hedging=settings.hedge_min_confidence,
+                default_hedge_ratio=settings.hedge_ratio,
+                max_hedge_amount=settings.max_hedge_amount
+            )
+            logger.info("✅ Execution Agent initialized with hedging support")
+        else:
+            logger.info("✅ Execution Agent initialized (hedging disabled)")
+        
     def execute_trade(
         self, 
         position: Position, 
         portfolio: Portfolio
     ) -> bool:
-        """Execute a trade (open position).
+        """Execute a trade (open position) with optional hedging.
         
         Args:
             position: Position to open
@@ -33,12 +46,19 @@ class ExecutionAgent:
             f"{position.shares:.2f} shares of {position.question[:50]}..."
         )
         
-        # Check if we can open this position
+        # STEP 1: Skip if we already have position in this market (Octagon strategy)
+        if self._has_existing_position(position.market_id, portfolio):
+            logger.warning(
+                f"⏭️  Skipping - already have position in market {position.market_id}"
+            )
+            return False
+        
+        # STEP 2: Check if we can open this position
         if not portfolio.can_open_position(position.capital_allocated):
             logger.warning("Cannot open position - portfolio limits reached")
             return False
         
-        # Place order via Polymarket API
+        # STEP 3: Place main order
         order_result = self.client.place_order(
             market_id=position.market_id,
             side="BUY",  # Always buying (either YES or NO shares)
@@ -46,14 +66,65 @@ class ExecutionAgent:
             price=position.entry_price
         )
         
-        if order_result:
-            # Add position to portfolio
-            portfolio.add_position(position)
-            logger.info(f"✅ Position opened successfully - ID: {position.id}")
-            return True
-        else:
-            logger.error("❌ Failed to place order")
+        if not order_result:
+            logger.error("❌ Failed to place main order")
             return False
+        
+        # Add main position to portfolio
+        portfolio.add_position(position)
+        logger.info(f"✅ Main position opened - ID: {position.id}")
+        
+        # STEP 4: Check if we should hedge (OctagonAI strategy)
+        if self.hedger:  # Only if hedging is enabled
+            confidence = getattr(position, 'confidence', 1.0)  # Get confidence from position
+            hedge_params = self.hedger.calculate_hedge(
+                position_size=position.capital_allocated,
+                confidence=confidence
+            )
+        
+            if hedge_params['should_hedge']:
+                logger.info(f"🛡️ Hedging trade: {hedge_params['reasoning']}")
+                
+                # Create hedge order (opposite side)
+                hedge_order = self.hedger.create_hedge_order(
+                    market_id=position.market_id,
+                    main_side=position.side.value.upper(),
+                    hedge_params=hedge_params
+                )
+                
+                if hedge_order:
+                    # Place hedge order
+                    hedge_result = self.client.place_order(
+                        market_id=hedge_order['market_id'],
+                        side="BUY",  # Buying opposite side
+                        size=hedge_order['amount'] / position.entry_price,  # Convert to shares
+                        price=1.0 - position.entry_price  # Price for opposite side
+                    )
+                    
+                    if hedge_result:
+                        logger.info(f"✅ Hedge placed: {hedge_order['side']} ${hedge_order['amount']:.2f}")
+                        # TODO: Track hedge as separate position
+                    else:
+                        logger.warning("⚠️ Failed to place hedge - main position still open")
+        
+        return True
+    
+    def _has_existing_position(self, market_id: str, portfolio: Portfolio) -> bool:
+        """Check if we already have a position in this market.
+        
+        Inspired by OctagonAI/kalshi-deep-trading-bot (skip duplicate trades).
+        
+        Args:
+            market_id: Market identifier
+            portfolio: Current portfolio
+            
+        Returns:
+            True if existing position found
+        """
+        for position in portfolio.open_positions:
+            if position.market_id == market_id:
+                return True
+        return False
     
     def monitor_positions(self, portfolio: Portfolio) -> List[str]:
         """Monitor open positions and check exit conditions.
