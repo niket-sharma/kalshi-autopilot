@@ -6,6 +6,11 @@ env/
 *.pyc
 __pycache__/
 
+# Kalshi API credentials (DO NOT COMMIT!)
+kalshi_private_key.pem
+*.pem
+*.key
+
 # IDE
 .vscode/
 .idea/
