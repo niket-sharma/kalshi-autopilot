@@ -1,8 +1,6 @@
-"""Polymarket CLOB API client."""
-import requests
-import hmac
-import hashlib
-import time
+"""Polymarket CLOB API client using py-clob-client."""
+from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import OrderArgs, OrderType
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from config import settings
@@ -13,31 +11,29 @@ logger = logging.getLogger(__name__)
 
 
 class PolymarketClient:
-    """Client for Polymarket CLOB API."""
+    """Client for Polymarket CLOB using wallet-based trading."""
     
     def __init__(self):
-        self.clob_url = settings.polymarket_clob_url
-        self.gamma_url = settings.polymarket_gamma_url
-        self.api_key = settings.polymarket_api_key
-        self.secret = settings.polymarket_secret
-        self.session = requests.Session()
+        # Initialize CLOB client with private key
+        host = "https://clob.polymarket.com"
+        chain_id = 137  # Polygon mainnet
         
-    def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
-        """Sign API request with HMAC."""
-        timestamp = str(int(time.time() * 1000))
-        message = f"{timestamp}{method}{path}{body}"
-        signature = hmac.new(
-            self.secret.encode(),
-            message.encode(),
-            hashlib.sha256
-        ).hexdigest()
+        try:
+            self.client = ClobClient(
+                host=host,
+                key=settings.polymarket_private_key,
+                chain_id=chain_id
+            )
+            logger.info("✅ Polymarket client initialized with wallet")
+            
+            # Get wallet address
+            self.address = self.client.get_address()
+            logger.info(f"📍 Wallet address: {self.address}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Polymarket client: {e}")
+            raise
         
-        return {
-            "POLY-API-KEY": self.api_key,
-            "POLY-SIGNATURE": signature,
-            "POLY-TIMESTAMP": timestamp,
-        }
-    
     def get_markets(self, limit: int = 20, active_only: bool = True) -> List[Market]:
         """Fetch active markets from Polymarket.
         
@@ -49,25 +45,17 @@ class PolymarketClient:
             List of Market objects
         """
         try:
-            # Use Gamma API for market data (public, no auth needed)
-            url = f"{self.gamma_url}/markets"
-            params = {
-                "limit": limit,
-                "active": active_only,
-                "_type": "binary"  # Focus on binary markets (Yes/No)
-            }
-            
-            response = self.session.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
+            # Get markets using sampling (for active markets)
+            markets_data = self.client.get_markets()
             
             markets = []
-            for item in data:
+            for item in markets_data[:limit]:
                 try:
-                    # Parse market data
                     market = self._parse_market(item)
                     if market:
-                        markets.append(market)
+                        # Filter for active only if needed
+                        if not active_only or market.status == MarketStatus.ACTIVE:
+                            markets.append(market)
                 except Exception as e:
                     logger.warning(f"Failed to parse market: {e}")
                     continue
@@ -80,52 +68,46 @@ class PolymarketClient:
             return []
     
     def _parse_market(self, data: Dict[str, Any]) -> Optional[Market]:
-        """Parse market data from API response."""
+        """Parse market data from CLOB API response."""
         try:
-            # Extract outcomes
+            # Extract basic info
+            market_id = data.get("condition_id", "")
+            question = data.get("question", "")
+            
+            # Parse outcomes
             outcomes = []
-            if "outcomes" in data:
-                for outcome_data in data["outcomes"]:
-                    outcome = Outcome(
-                        id=outcome_data.get("id", ""),
-                        title=outcome_data.get("title", ""),
-                        price=float(outcome_data.get("price", 0.5))
-                    )
-                    outcomes.append(outcome)
+            tokens = data.get("tokens", [])
+            for token_data in tokens:
+                outcome = Outcome(
+                    id=token_data.get("token_id", ""),
+                    title=token_data.get("outcome", ""),
+                    price=float(token_data.get("price", 0.5))
+                )
+                outcomes.append(outcome)
             
-            # Parse timestamps
-            created_at = None
-            if "createdAt" in data:
-                created_at = datetime.fromisoformat(data["createdAt"].replace("Z", "+00:00"))
-            
-            end_date = None
-            if "endDate" in data:
-                end_date = datetime.fromisoformat(data["endDate"].replace("Z", "+00:00"))
-            
-            # Determine status
+            # Parse status
             status = MarketStatus.ACTIVE
             if data.get("closed", False):
                 status = MarketStatus.CLOSED
             elif data.get("resolved", False):
                 status = MarketStatus.RESOLVED
             
+            # Create market object
             market = Market(
-                id=data.get("conditionId", data.get("id", "")),
-                question=data.get("question", ""),
+                id=market_id,
+                question=question,
                 description=data.get("description"),
                 outcomes=outcomes,
                 volume=float(data.get("volume", 0)),
                 liquidity=float(data.get("liquidity", 0)),
-                created_at=created_at,
-                end_date=end_date,
                 status=status,
                 category=data.get("category"),
                 tags=data.get("tags", [])
             )
             
-            # Calculate implied probability from Yes price
-            if market.yes_price:
-                market.implied_probability = market.yes_price
+            # Set implied probability from first outcome (YES)
+            if outcomes:
+                market.implied_probability = outcomes[0].price
             
             return market
             
@@ -136,14 +118,13 @@ class PolymarketClient:
     def get_market_by_id(self, market_id: str) -> Optional[Market]:
         """Fetch a specific market by ID."""
         try:
-            url = f"{self.gamma_url}/markets/{market_id}"
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            return self._parse_market(data)
+            # Get market data
+            market_data = self.client.get_market(market_id)
+            if market_data:
+                return self._parse_market(market_data)
         except Exception as e:
             logger.error(f"Failed to fetch market {market_id}: {e}")
-            return None
+        return None
     
     def get_high_volume_markets(self, min_volume: float = 10000, limit: int = 10) -> List[Market]:
         """Get high-volume markets (most liquid/active)."""
@@ -157,11 +138,17 @@ class PolymarketClient:
         
         return high_vol[:limit]
     
-    def place_order(self, market_id: str, side: str, size: float, price: float) -> Optional[Dict]:
-        """Place an order on Polymarket (LIVE MODE ONLY).
+    def place_order(
+        self, 
+        token_id: str,
+        side: str,
+        size: float,
+        price: float
+    ) -> Optional[Dict]:
+        """Place an order on Polymarket.
         
         Args:
-            market_id: Market condition ID
+            token_id: Token ID to trade
             side: "BUY" or "SELL"
             size: Number of shares
             price: Price per share (0-1)
@@ -170,19 +157,44 @@ class PolymarketClient:
             Order response or None if failed
         """
         if settings.is_test_mode:
-            logger.info(f"[TEST MODE] Would place order: {side} {size} shares at ${price} on market {market_id}")
+            logger.info(
+                f"[TEST MODE] Would place order: {side} {size} shares "
+                f"at ${price:.3f} (token: {token_id})"
+            )
             return {
                 "success": True,
                 "test_mode": True,
-                "order_id": f"test_{int(time.time())}"
+                "order_id": f"test_{int(datetime.utcnow().timestamp())}"
             }
         
         try:
-            # Real order placement would go here
-            # This requires more setup (wallet signing, etc.)
-            logger.warning("Live trading not yet implemented - use test mode")
-            return None
+            # Create order arguments
+            order_args = OrderArgs(
+                token_id=token_id,
+                price=price,
+                size=size,
+                side=side.upper(),
+                order_type=OrderType.GTC  # Good-til-cancelled
+            )
+            
+            # Place order
+            signed_order = self.client.create_order(order_args)
+            resp = self.client.post_order(signed_order)
+            
+            logger.info(f"✅ Order placed: {resp.get('orderID', 'unknown')}")
+            return resp
             
         except Exception as e:
             logger.error(f"Failed to place order: {e}")
             return None
+    
+    def get_balance(self) -> float:
+        """Get USDC balance."""
+        try:
+            balances = self.client.get_balances()
+            usdc_balance = balances.get("USDC", 0)
+            logger.info(f"💰 USDC Balance: ${usdc_balance:.2f}")
+            return float(usdc_balance)
+        except Exception as e:
+            logger.error(f"Failed to get balance: {e}")
+            return 0.0

@@ -8,11 +8,8 @@ class Settings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
     
-    # Polymarket API
-    polymarket_api_key: str = ""
-    polymarket_secret: str = ""
-    polymarket_private_key: str = ""
-    polymarket_proxy_address: str = ""
+    # Polymarket Wallet
+    polymarket_private_key: str
     
     # AI Model Configuration
     ai_provider: str = "gemini"  # gemini, openai, or anthropic

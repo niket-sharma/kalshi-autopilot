@@ -1,8 +1,8 @@
-"""Research Agent - Analyzes events and estimates probabilities."""
-import google.generativeai as genai
-from typing import Optional, Tuple
+"""Research Agent - Analyzes events using 3-layer optimization."""
+from typing import Optional, List
 from models import Market, Event
 from api import NewsAggregator
+from strategy import MarketFilter, QuantitativeScorer, MinimalLLMAnalyzer
 from config import settings
 import logging
 
@@ -10,38 +10,127 @@ logger = logging.getLogger(__name__)
 
 
 class ResearchAgent:
-    """Agent that researches events and estimates probabilities."""
+    """Agent that researches events using optimized 3-layer approach."""
     
     def __init__(self):
+        # Layer 1: Filters
+        self.filter = MarketFilter(
+            min_liquidity=5000,
+            min_volume=10000,
+            min_days_to_close=2,
+            max_price=0.85,
+            min_price=0.15
+        )
+        
+        # Layer 2: Quantitative scorer
+        self.scorer = QuantitativeScorer(
+            min_score=50.0
+        )
+        
+        # Layer 3: Minimal LLM
+        self.llm = MinimalLLMAnalyzer()
+        
+        # News aggregator
         self.news_aggregator = NewsAggregator()
         
-        # Configure AI provider
-        if settings.ai_provider == "gemini":
-            if settings.gemini_api_key:
-                genai.configure(api_key=settings.gemini_api_key)
-                self.model = genai.GenerativeModel('gemini-3-flash')
-                logger.info("Using Gemini 3 Flash (FREE tier)")
-            else:
-                raise ValueError("GEMINI_API_KEY not set in .env")
-        elif settings.ai_provider == "openai":
-            from openai import OpenAI
-            if settings.openai_api_key:
-                self.client = OpenAI(api_key=settings.openai_api_key)
-                logger.info("Using OpenAI GPT-4o-mini")
-            else:
-                raise ValueError("OPENAI_API_KEY not set in .env")
-        elif settings.ai_provider == "anthropic":
-            from anthropic import Anthropic
-            if settings.anthropic_api_key:
-                self.client = Anthropic(api_key=settings.anthropic_api_key)
-                logger.info("Using Anthropic Claude Sonnet")
-            else:
-                raise ValueError("ANTHROPIC_API_KEY not set in .env")
-        else:
-            raise ValueError(f"Unknown AI provider: {settings.ai_provider}")
+        logger.info("🧠 Research Agent initialized with 3-layer optimization")
+        logger.info("   Layer 1: Python filters")
+        logger.info("   Layer 2: Quantitative scoring")
+        logger.info("   Layer 3: Minimal LLM calls")
+    
+    def analyze_markets(self, markets: List[Market]) -> List[Event]:
+        """Analyze multiple markets efficiently.
         
+        Uses 3-layer approach:
+        1. Filter out bad markets (no LLM)
+        2. Score remaining markets (no LLM)
+        3. LLM analysis only for top candidates
+        
+        Args:
+            markets: List of markets to analyze
+            
+        Returns:
+            List of Event objects with analysis
+        """
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🔍 Starting 3-Layer Market Analysis")
+        logger.info(f"{'='*60}")
+        logger.info(f"📊 Total markets: {len(markets)}")
+        
+        # LAYER 1: Quick filters (Python only)
+        logger.info("\n📍 LAYER 1: Applying filters...")
+        filtered_markets = self.filter.filter_markets(markets)
+        
+        if not filtered_markets:
+            logger.info("❌ No markets passed filters")
+            return []
+        
+        # LAYER 2: Quantitative scoring (Python only)
+        logger.info("\n📍 LAYER 2: Calculating scores...")
+        scored_markets = self.scorer.score_markets(filtered_markets)
+        
+        if not scored_markets:
+            logger.info("❌ No markets scored above threshold")
+            return []
+        
+        # Take top 5 for LLM analysis
+        top_markets = scored_markets[:5]
+        logger.info(f"\n✅ Top {len(top_markets)} markets for LLM analysis:")
+        for i, (market, score) in enumerate(top_markets, 1):
+            logger.info(f"  {i}. Score {score:.1f}: {market.question[:60]}...")
+        
+        # LAYER 3: Minimal LLM analysis (only top candidates)
+        logger.info("\n📍 LAYER 3: LLM analysis (minimal tokens)...")
+        events = []
+        
+        for market, quant_score in top_markets:
+            # Get news headline (just first one)
+            keywords = self.news_aggregator.extract_keywords(market.question)
+            articles = self.news_aggregator.get_news_for_event(keywords, days_back=1, max_results=1)
+            news_headline = articles[0].get('title', '') if articles else None
+            
+            # Quick LLM check (minimal tokens)
+            llm_result = self.llm.quick_probability_check(market, news_headline)
+            
+            # Create event
+            event = Event(
+                market=market,
+                news_summary=news_headline or "No recent news",
+                research_probability=llm_result['probability'],
+                confidence=llm_result['confidence']
+            )
+            
+            # Calculate edge
+            event.calculate_edge()
+            
+            # Add quantitative score as metadata
+            event.quant_score = quant_score
+            
+            if event.has_edge and event.is_confident:
+                logger.info(
+                    f"   ✅ {market.question[:50]}... "
+                    f"Edge: {event.edge:.1%} (AI: {event.research_probability:.0%} vs Market: {market.yes_price:.0%})"
+                )
+                events.append(event)
+            else:
+                logger.debug(
+                    f"   ❌ No trade: {market.question[:50]}... "
+                    f"Edge: {event.edge:.1%}"
+                )
+        
+        logger.info(f"\n{'='*60}")
+        logger.info(f"📈 Analysis Complete:")
+        logger.info(f"   Started with: {len(markets)} markets")
+        logger.info(f"   After filters: {len(filtered_markets)}")
+        logger.info(f"   After scoring: {len(scored_markets)}")
+        logger.info(f"   LLM analyzed: {len(top_markets)}")
+        logger.info(f"   Tradeable opportunities: {len(events)}")
+        logger.info(f"{'='*60}\n")
+        
+        return events
+    
     def analyze_market(self, market: Market) -> Event:
-        """Analyze a market and estimate probability.
+        """Analyze a single market (legacy method for compatibility).
         
         Args:
             market: Market to analyze
@@ -49,144 +138,17 @@ class ResearchAgent:
         Returns:
             Event with analysis
         """
-        logger.info(f"Analyzing market: {market.question}")
+        # Use optimized multi-market analyzer with single market
+        events = self.analyze_markets([market])
         
-        # Step 1: Gather news context
-        keywords = self.news_aggregator.extract_keywords(market.question)
-        articles = self.news_aggregator.get_news_for_event(keywords)
-        news_summary = self.news_aggregator.summarize_news(articles)
+        if events:
+            return events[0]
         
-        # Step 2: Use AI to analyze and estimate probability
-        probability, confidence, reasoning = self._estimate_probability(
-            question=market.question,
-            news_context=news_summary,
-            current_price=market.yes_price
-        )
-        
-        # Step 3: Create Event object
-        event = Event(
+        # If no trade found, still return event but with no edge
+        return Event(
             market=market,
-            news_summary=news_summary,
-            research_probability=probability,
-            confidence=confidence
+            news_summary="Filtered out by optimization",
+            research_probability=market.yes_price or 0.5,
+            confidence=0.0,
+            edge=0.0
         )
-        
-        # Calculate edge
-        event.calculate_edge()
-        
-        logger.info(
-            f"Analysis complete - "
-            f"Probability: {probability:.2%}, "
-            f"Confidence: {confidence:.2%}, "
-            f"Edge: {event.edge:.2%} "
-            f"(Market: {market.yes_price:.2%})"
-        )
-        
-        return event
-    
-    def _estimate_probability(
-        self, 
-        question: str, 
-        news_context: str,
-        current_price: Optional[float]
-    ) -> Tuple[float, float, str]:
-        """Use AI to estimate probability of event.
-        
-        Args:
-            question: Market question
-            news_context: News summary
-            current_price: Current market price (implied probability)
-            
-        Returns:
-            (probability, confidence, reasoning)
-        """
-        prompt = f"""You are an expert analyst for prediction markets. Analyze this event and provide your probability estimate.
-
-Market Question: {question}
-
-Current Market Price: {current_price:.2%} (implied probability)
-
-Recent News Context:
-{news_context}
-
-Please analyze this event and provide:
-1. Your estimated probability (0.0 to 1.0) that the answer is YES
-2. Your confidence level (0.0 to 1.0) in this estimate
-3. Brief reasoning (2-3 sentences)
-
-Consider:
-- Base rates and historical precedents
-- Current news and developments
-- Known unknowns and uncertainties
-- Whether the market price seems mispriced
-
-Format your response EXACTLY as:
-PROBABILITY: 0.XX
-CONFIDENCE: 0.XX
-REASONING: Your reasoning here
-"""
-        
-        try:
-            if settings.ai_provider == "gemini":
-                response = self.model.generate_content(prompt)
-                content = response.text
-                
-            elif settings.ai_provider == "openai":
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are an expert prediction market analyst."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=300
-                )
-                content = response.choices[0].message.content
-                
-            elif settings.ai_provider == "anthropic":
-                response = self.client.messages.create(
-                    model="claude-sonnet-4-5",
-                    max_tokens=300,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                content = response.content[0].text
-            
-            # Parse response
-            probability = self._extract_value(content, "PROBABILITY")
-            confidence = self._extract_value(content, "CONFIDENCE")
-            reasoning = self._extract_reasoning(content)
-            
-            return probability, confidence, reasoning
-            
-        except Exception as e:
-            logger.error(f"Failed to estimate probability: {e}")
-            # Fallback: return market price with low confidence
-            return current_price or 0.5, 0.3, f"Analysis failed ({settings.ai_provider}), using market price"
-    
-    def _extract_value(self, text: str, field: str) -> float:
-        """Extract numerical value from AI response."""
-        try:
-            for line in text.split("\n"):
-                if field in line.upper():
-                    # Extract number
-                    parts = line.split(":")
-                    if len(parts) > 1:
-                        value = float(parts[1].strip())
-                        return max(0.0, min(1.0, value))  # Clamp to [0, 1]
-        except:
-            pass
-        return 0.5  # Default to 50% if parsing fails
-    
-    def _extract_reasoning(self, text: str) -> str:
-        """Extract reasoning from AI response."""
-        try:
-            for line in text.split("\n"):
-                if "REASONING" in line.upper():
-                    parts = line.split(":", 1)
-                    if len(parts) > 1:
-                        return parts[1].strip()
-        except:
-            pass
-        return "No reasoning provided"

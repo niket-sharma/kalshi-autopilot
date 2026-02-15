@@ -11,9 +11,10 @@ langchain>=0.1.0
 langchain-openai>=0.0.5
 anthropic>=0.20.0  # Optional
 
-# Blockchain/Web3
+# Blockchain/Web3 & Polymarket
 web3>=6.0.0
 eth-account>=0.10.0
+py-clob-client>=0.20.0
 
 # API & HTTP
 requests>=2.31.0
