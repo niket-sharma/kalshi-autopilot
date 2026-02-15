@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
     
     # Kalshi API Credentials
-    kalshi_api_key: str = ""  # Your Kalshi email
-    kalshi_api_secret: str = ""  # Your Kalshi password
+    kalshi_api_key: str = ""  # Your Kalshi API key ID
+    kalshi_private_key_path: str = "kalshi_private_key.pem"  # Path to private key file
     
     # AI Model Configuration
     ai_provider: str = "gemini"  # gemini, openai, or anthropic
