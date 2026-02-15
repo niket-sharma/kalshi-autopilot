@@ -29,15 +29,15 @@ Event Monitor → Research Agent → Risk Manager → Execution Agent
 
 ### Prerequisites
 - Python 3.10+
-- Polymarket account + API credentials
-- USDC on Polygon network
-- OpenAI API key
+- **Kalshi account** (create at https://kalshi.com)
+- **US resident** (CFTC requires identity verification)
+- Gemini API key (free - get from https://aistudio.google.com/apikey)
 
 ### Installation
 ```bash
 # Clone and setup
-git clone https://github.com/niket-sharma/polymarket-autopilot.git
-cd polymarket-autopilot
+git clone https://github.com/niket-sharma/kalshi-autopilot.git
+cd kalshi-autopilot
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -50,17 +50,17 @@ cp .env.example .env
 ### Environment Variables
 ```bash
 # .env
-POLYMARKET_API_KEY=your_api_key
-POLYMARKET_SECRET=your_secret
-POLYMARKET_PRIVATE_KEY=your_wallet_private_key
-OPENAI_API_KEY=your_openai_key
-NEWS_API_KEY=your_news_api_key  # optional
+KALSHI_API_KEY=your_email@example.com  # Your Kalshi login email
+KALSHI_API_SECRET=your_password        # Your Kalshi password
+GEMINI_API_KEY=your_gemini_key         # Free from Google AI Studio
+NEWS_API_KEY=your_news_api_key         # Optional
 
 # Trading config
 INITIAL_CAPITAL=25.0
 MAX_POSITION_SIZE=0.15  # 15% of capital per trade
 RISK_PER_TRADE=0.05     # 5% risk per trade
 AUTO_COMPOUND=true
+MODE=test  # Start with test mode!
 ```
 
 ### Run
