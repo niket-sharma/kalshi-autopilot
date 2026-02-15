@@ -51,7 +51,8 @@ try:
     print("Sample markets:")
     for i, m in enumerate(markets[:5], 1):
         print(f"  {i}. {m.question[:65]}...")
-        print(f"     Volume: ${m.volume:,.0f} | Liquidity: ${m.liquidity:,.0f} | Price: {m.yes_price:.0%}")
+        price_str = f"{m.yes_price:.0%}" if m.yes_price else "N/A"
+        print(f"     Volume: ${m.volume:,.0f} | Liquidity: ${m.liquidity:,.0f} | Price: {price_str}")
     print()
     
     # Run optimized analysis

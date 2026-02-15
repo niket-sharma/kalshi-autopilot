@@ -45,8 +45,9 @@ class PolymarketClient:
             List of Market objects
         """
         try:
-            # Get markets using sampling (for active markets)
-            markets_data = self.client.get_markets()
+            # Get markets (returns dict with 'data' key)
+            response = self.client.get_markets()
+            markets_data = response.get('data', [])
             
             markets = []
             for item in markets_data[:limit]:
