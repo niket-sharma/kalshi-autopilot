@@ -1,7 +1,7 @@
 """Agent Orchestrator - Coordinates multi-agent workflow."""
 from typing import List
 from models import Portfolio, Event
-from api import PolymarketClient
+from api import KalshiClient
 from .research_agent import ResearchAgent
 from .risk_manager import RiskManager
 from .execution_agent import ExecutionAgent
@@ -18,7 +18,7 @@ class AgentOrchestrator:
         self.portfolio = portfolio
         
         # Initialize agents
-        self.market_client = PolymarketClient()
+        self.market_client = KalshiClient()
         self.researcher = ResearchAgent()
         self.risk_manager = RiskManager()
         self.executor = ExecutionAgent()
@@ -26,6 +26,7 @@ class AgentOrchestrator:
         logger.info("🤖 Agent Orchestrator initialized")
         logger.info(f"📊 Portfolio: ${self.portfolio.equity:.2f}")
         logger.info(f"🎯 Mode: {settings.mode.upper()}")
+        logger.info(f"✅ Using Kalshi (CFTC-regulated, legal in US)")
     
     def run_trading_cycle(self) -> dict:
         """Run one complete trading cycle.

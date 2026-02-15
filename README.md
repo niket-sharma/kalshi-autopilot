@@ -1,8 +1,10 @@
-# Polymarket Autopilot 🤖
+# Kalshi Autopilot 🤖
 
-**Autonomous AI trading agent for Polymarket prediction markets**
+**Autonomous AI trading agent for Kalshi prediction markets**
 
-Uses multi-agent AI system to analyze events, assess probabilities, manage risk, and execute profitable trades automatically.
+✅ **CFTC-Regulated & Legal in the US**
+
+Uses multi-agent AI system to analyze events, assess probabilities, manage risk, and execute profitable trades automatically on Kalshi - the first CFTC-regulated prediction market exchange.
 
 ## 🎯 Features
 

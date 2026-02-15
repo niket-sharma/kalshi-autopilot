@@ -1,5 +1,5 @@
-"""API clients for Polymarket Autopilot."""
-from .polymarket_client import PolymarketClient
+"""API clients for Kalshi Autopilot."""
+from .kalshi_client import KalshiClient
 from .news_aggregator import NewsAggregator
 
-__all__ = ["PolymarketClient", "NewsAggregator"]
+__all__ = ["KalshiClient", "NewsAggregator"]

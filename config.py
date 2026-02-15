@@ -8,8 +8,9 @@ class Settings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
     
-    # Polymarket Wallet
-    polymarket_private_key: str
+    # Kalshi API Credentials
+    kalshi_api_key: str = ""  # Your Kalshi email
+    kalshi_api_secret: str = ""  # Your Kalshi password
     
     # AI Model Configuration
     ai_provider: str = "gemini"  # gemini, openai, or anthropic
@@ -42,9 +43,9 @@ class Settings(BaseSettings):
     # Execution Mode
     mode: Literal["test", "live"] = "test"
     
-    # URLs
-    polymarket_clob_url: str = "https://clob.polymarket.com"
-    polymarket_gamma_url: str = "https://gamma-api.polymarket.com"
+    # Kalshi URLs (auto-selected based on mode)
+    kalshi_api_url: str = "https://trading-api.kalshi.com/trade-api/v2"
+    kalshi_demo_url: str = "https://demo-api.kalshi.co/trade-api/v2"
     
     @property
     def is_test_mode(self) -> bool:

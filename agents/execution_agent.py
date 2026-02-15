@@ -1,7 +1,7 @@
 """Execution Agent - Places orders and manages positions."""
 from typing import Optional, List, Dict
 from models import Position, Portfolio, PositionStatus
-from api import PolymarketClient
+from api import KalshiClient
 from config import settings
 import logging
 
@@ -12,7 +12,7 @@ class ExecutionAgent:
     """Agent that executes trades and manages positions."""
     
     def __init__(self):
-        self.client = PolymarketClient()
+        self.client = KalshiClient()
         
     def execute_trade(
         self, 
