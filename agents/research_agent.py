@@ -1,8 +1,8 @@
-"""Research Agent - Analyzes events using 3-layer optimization."""
+"""Research Agent - Analyzes events using pattern-based strategy with minimal LLM."""
 from typing import Optional, List
 from models import Market, Event
 from api import NewsAggregator
-from strategy import MarketFilter, QuantitativeScorer, MinimalLLMAnalyzer
+from strategy import MarketFilter, QuantitativeScorer, PatternBasedStrategy
 from config import settings
 import logging
 
@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class ResearchAgent:
-    """Agent that researches events using optimized 3-layer approach."""
+    """Agent that researches events using advanced pattern detection + minimal LLM."""
     
     def __init__(self):
-        # Layer 1: Filters
+        # Layer 1: Quick filters
         self.filter = MarketFilter(
             min_liquidity=5000,
             min_volume=10000,
@@ -22,21 +22,21 @@ class ResearchAgent:
             min_price=0.15
         )
         
-        # Layer 2: Quantitative scorer
+        # Layer 2: Quantitative scorer  
         self.scorer = QuantitativeScorer(
             min_score=50.0
         )
         
-        # Layer 3: Minimal LLM
-        self.llm = MinimalLLMAnalyzer()
+        # Layer 3: Pattern-based strategy (advanced logic + minimal LLM)
+        self.pattern_strategy = PatternBasedStrategy()
         
         # News aggregator
         self.news_aggregator = NewsAggregator()
         
-        logger.info("🧠 Research Agent initialized with 3-layer optimization")
-        logger.info("   Layer 1: Python filters")
+        logger.info("🧠 Research Agent initialized with pattern-based strategy")
+        logger.info("   Layer 1: Basic filters")
         logger.info("   Layer 2: Quantitative scoring")
-        logger.info("   Layer 3: Minimal LLM calls")
+        logger.info("   Layer 3: Advanced patterns + minimal LLM confirmation")
     
     def analyze_markets(self, markets: List[Market]) -> List[Event]:
         """Analyze multiple markets efficiently.
@@ -79,8 +79,8 @@ class ResearchAgent:
         for i, (market, score) in enumerate(top_markets, 1):
             logger.info(f"  {i}. Score {score:.1f}: {market.question[:60]}...")
         
-        # LAYER 3: Minimal LLM analysis (only top candidates)
-        logger.info("\n📍 LAYER 3: LLM analysis (minimal tokens)...")
+        # LAYER 3: Pattern-based analysis (advanced logic + minimal LLM)
+        logger.info("\n📍 LAYER 3: Pattern detection + LLM confirmation...")
         events = []
         
         for market, quant_score in top_markets:
@@ -89,27 +89,35 @@ class ResearchAgent:
             articles = self.news_aggregator.get_news_for_event(keywords, days_back=1, max_results=1)
             news_headline = articles[0].get('title', '') if articles else None
             
-            # Quick LLM check (minimal tokens)
-            llm_result = self.llm.quick_probability_check(market, news_headline)
+            # Run pattern-based analysis (Claude's logic + Gemini confirmation)
+            analysis = self.pattern_strategy.analyze_market(market, news_headline)
+            
+            # Log pattern insights
+            if analysis.get('pattern_analysis'):
+                top_pattern = analysis['pattern_analysis']['top_pattern']
+                pattern_score = analysis['pattern_analysis']['combined_score']
+                logger.debug(f"   Pattern: {top_pattern} (score: {pattern_score:.0f}/100)")
             
             # Create event
             event = Event(
                 market=market,
                 news_summary=news_headline or "No recent news",
-                research_probability=llm_result['probability'],
-                confidence=llm_result['confidence']
+                research_probability=analysis['probability'],
+                confidence=analysis['confidence']
             )
             
             # Calculate edge
             event.calculate_edge()
             
-            # Add quantitative score as metadata
+            # Add metadata
             event.quant_score = quant_score
+            event.pattern_analysis = analysis.get('pattern_analysis', {})
             
             if event.has_edge and event.is_confident:
                 logger.info(
                     f"   ✅ {market.question[:50]}... "
-                    f"Edge: {event.edge:.1%} (AI: {event.research_probability:.0%} vs Market: {market.yes_price:.0%})"
+                    f"Edge: {event.edge:.1%} | Pattern: {top_pattern} | "
+                    f"(Model: {event.research_probability:.0%} vs Market: {market.yes_price:.0%})"
                 )
                 events.append(event)
             else:
