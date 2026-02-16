@@ -13,13 +13,13 @@ class ResearchAgent:
     """Agent that researches events using advanced pattern detection + minimal LLM."""
     
     def __init__(self):
-        # Layer 1: Quick filters
+        # Layer 1: Quick filters (adjusted for Kalshi's lower liquidity)
         self.filter = MarketFilter(
-            min_liquidity=5000,
-            min_volume=10000,
-            min_days_to_close=2,
-            max_price=0.85,
-            min_price=0.15
+            min_liquidity=10,      # Very low - Kalshi has limited liquidity
+            min_volume=10,         # Very low - accept most markets
+            min_days_to_close=0.5, # Accept markets closing in 12+ hours
+            max_price=0.95,        # Allow extreme prices
+            min_price=0.05         # Allow extreme prices
         )
         
         # Layer 2: Quantitative scorer  

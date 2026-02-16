@@ -72,8 +72,8 @@ class AgentOrchestrator:
         # Step 3: Scan markets for opportunities
         logger.info("\n🔍 Step 2: Scanning markets...")
         markets = self.market_client.get_high_volume_markets(
-            min_volume=5000,  # Minimum $5k volume
-            limit=20
+            min_volume=0,  # Accept all markets (Kalshi has low liquidity)
+            limit=50
         )
         summary["markets_scanned"] = len(markets)
         logger.info(f"  Found {len(markets)} high-volume markets")
